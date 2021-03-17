@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Organisation;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 /**
  * Class OrganisationService
@@ -22,5 +23,18 @@ class OrganisationService
         $organisation = new Organisation();
 
         return $organisation;
+    }
+
+    /**
+     * @param string $filter
+     *
+     * @return EloquentCollection
+     */
+    public function getOrganisations(string $filter): EloquentCollection
+    {
+        $filter = ($filter == 'subbed') ? 1 : (($filter == 'trial') ? 0 : null);
+        return Organisation::when($filter !== null, function ($q) use ($filter) {
+            return $q->where('subscribed', $filter);
+        })->get();
     }
 }
