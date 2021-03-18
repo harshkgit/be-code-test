@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
+use Carbon\Carbon;
+
 use App\Organisation;
 use App\Services\OrganisationService;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
-use App\Transformers\OrganisationTransformer;
-use League\Fractal;
+use App\Http\Requests\StoreOrgnization;
+use App\Mail\OrganizationCreated;
 
 /**
  * Class OrganisationController
@@ -19,17 +20,34 @@ class OrganisationController extends ApiController
 {
     /**
      * @param OrganisationService $service
+     * @param StoreOrgnization $request
      *
      * @return JsonResponse
      */
-    public function store(OrganisationService $service): JsonResponse
+    public function store(StoreOrgnization $request, OrganisationService $service): JsonResponse
     {
-        /** @var Organisation $organisation */
-        $organisation = $service->createOrganisation($this->request->all());
+        $this->request->merge([
+            'owner_user_id' => \Auth::id(),
+            'trial_end'     => Carbon::now()->addDays(30),
+            'subscribed'    => 0
+        ]);
 
-        return $this
-            ->transformItem('organisation', $organisation, ['user'])
-            ->respond();
+        try {
+            /** @var Organisation $organisation */
+            $organisation = $service->createOrganisation($this->request->all());
+
+            /** send email to user **/
+            \Mail::to(\Auth::user())
+                ->send(new OrganizationCreated($organisation));
+
+            return $this
+                ->transformItem('organisation', $organisation, ['user'])
+                ->respond();
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error while processing. ' . $e->getMessage()
+            ], 422);
+        }
     }
 
     /**
@@ -40,12 +58,16 @@ class OrganisationController extends ApiController
     public function listAll(OrganisationService $service): JsonResponse
     {
         $filter = $this->request->query('filter', 'all');
-
-        /** @var EloquentCollection $organisations */
-        $organisations = $service->getOrganisations($filter);
-
-        return $this
-            ->transformCollection('organization', $organisations, ['user'])
-            ->respond();
+        try {
+            /** @var EloquentCollection $organisations */
+            $organisations = $service->getOrganisations($filter);
+            return $this
+                ->transformCollection('organization', $organisations, ['user'])
+                ->respond();
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error while processing. ' . $e->getMessage()
+            ], 422);
+        }
     }
 }

@@ -20,8 +20,8 @@ class OrganisationService
      */
     public function createOrganisation(array $attributes): Organisation
     {
-        $organisation = new Organisation();
-
+        $organisation = new Organisation($attributes);
+        $organisation->save();
         return $organisation;
     }
 
@@ -33,8 +33,9 @@ class OrganisationService
     public function getOrganisations(string $filter): EloquentCollection
     {
         $filter = ($filter == 'subbed') ? 1 : (($filter == 'trial') ? 0 : null);
-        return Organisation::when($filter !== null, function ($q) use ($filter) {
-            return $q->where('subscribed', $filter);
-        })->get();
+        return Organisation::with('owner')
+            ->when($filter !== null, function ($q) use ($filter) {
+                return $q->where('subscribed', $filter);
+            })->get();
     }
 }
